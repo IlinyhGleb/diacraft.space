@@ -2,7 +2,7 @@ import type { BlockData, ArrowData } from '../types';
 import { getAnchor } from '../utils/blocks';
 import {
   buildPathWithFixed,
-  computeBendsForArrow,
+  computeElbowForArrow,
   type Pt,
 } from './arrowGeometry';
 
@@ -70,9 +70,8 @@ function groupThroughHorizontal(
 
 /**
  * Apply a drag to the bend at `bendIndex`, keeping the path orthogonal.
- * - Movement happens along a single axis (the free one).
- * - All waypoints transitively connected by segments perpendicular to that
- *   axis move together, so no new corners are introduced.
+ * Only the *original* waypoint positions are returned — auto-inserted
+ * corners are never promoted to waypoints.
  */
 export function applyBendDrag(
   from: BlockData,
@@ -82,13 +81,16 @@ export function applyBendDrag(
   dx: number,
   dy: number
 ): Pt[] | null {
-  const waypoints = arrow.waypoints ?? computeBendsForArrow(arrow, [from, to]);
+  const a = getAnchor(from, arrow.fromSide);
+  const b = getAnchor(to, arrow.toSide);
+  const waypoints =
+    arrow.waypoints ??
+    computeElbowForArrow(a, arrow.fromSide, b, arrow.toSide);
+
   if (waypoints.length === 0) return null;
   if (bendIndex < 0 || bendIndex >= waypoints.length) return null;
 
-  const a = getAnchor(from, arrow.fromSide);
-  const b = getAnchor(to, arrow.toSide);
-  const { points, fixed } = buildPathWithFixed(
+  const { points, fixed, waypointIndices } = buildPathWithFixed(
     a,
     arrow.fromSide,
     b,
@@ -96,13 +98,9 @@ export function applyBendDrag(
     waypoints
   );
 
-  const bendPathIndices: number[] = [];
-  for (let i = 0; i < points.length; i++) {
-    if (!fixed[i]) bendPathIndices.push(i);
-  }
-  if (bendIndex >= bendPathIndices.length) return null;
-  const pathIdx = bendPathIndices[bendIndex];
+  if (waypointIndices.length !== waypoints.length) return null;
 
+  const pathIdx = waypointIndices[bendIndex];
   const orient = orientSegments(points);
   const xGroup = groupThroughVertical(orient, pathIdx);
   const yGroup = groupThroughHorizontal(orient, pathIdx);
@@ -126,9 +124,5 @@ export function applyBendDrag(
     else newPoints[i].y += delta;
   }
 
-  const result: Pt[] = [];
-  for (let i = 0; i < newPoints.length; i++) {
-    if (!fixed[i]) result.push(newPoints[i]);
-  }
-  return result;
+  return waypointIndices.map((i) => newPoints[i]);
 }

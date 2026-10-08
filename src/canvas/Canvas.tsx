@@ -16,12 +16,10 @@ import { useArrows } from './Arrows/useArrows';
 
 import { ArrowShape } from './Arrows/ArrowShape';
 import { SelectedArrowOverlay } from './Arrows/SelectedArrowOverlay';
-import {
-  exportPng,
-  exportJpeg,
-  exportSvg,
-  type Crop,
-} from '../export/exportImage';
+
+import { exportPng, exportJpeg, exportSvg } from '../export/exportImage';
+
+
 import { useHistory } from '../state/useHistory';
 import { loadState, saveState } from '../state/persistence';
 import {
@@ -371,26 +369,54 @@ const handleBlockDragEnd = (id: string, x: number, y: number) => {
   const { handleAddWaypoint, handleBendDragEnd, handleBendDelete } =
     useArrows(commit);
 
-  const runExport = (
-    fn: (stage: Konva.Stage, crop?: Crop) => void | Promise<void>,
-    bg: 'transparent' | 'white'
-  ) => {
-    setSelectedId(null);
-    setSelectedArrowId(null);
-    setExportMode(bg);
-    setTimeout(async () => {
-      if (stageRef.current) {
-        stageRef.current.batchDraw();
-        const stageX = stageRef.current.x();
-        const stageY = stageRef.current.y();
-        const crop =
-          getContentBBox(blocksRef.current, arrowsRef.current, stageX, stageY) ??
-          undefined;
-        await fn(stageRef.current, crop);
-      }
+const runExport = (
+  fn: (stage: Konva.Stage) => void | Promise<void>,
+  bg: 'transparent' | 'white'
+) => {
+  setSelectedId(null);
+  setSelectedArrowId(null);
+  setExportMode(bg);
+
+  setTimeout(async () => {
+    const stage = stageRef.current;
+    if (!stage) {
       setExportMode(null);
-    }, 150);
-  };
+      return;
+    }
+
+    const crop = getContentBBox(blocksRef.current, arrowsRef.current);
+    if (!crop) {
+      await fn(stage);
+      setExportMode(null);
+      return;
+    }
+
+    // Temporarily resize/reposition the Konva stage so the entire
+    // content box fits inside the renderable canvas, then restore.
+    // This avoids clipping blocks near the viewport edge.
+    const prevW = stage.width();
+    const prevH = stage.height();
+    const prevX = stage.x();
+    const prevY = stage.y();
+
+    stage.width(crop.width);
+    stage.height(crop.height);
+    stage.x(-crop.x);
+    stage.y(-crop.y);
+    stage.batchDraw();
+
+    try {
+      await fn(stage);
+    } finally {
+      stage.width(prevW);
+      stage.height(prevH);
+      stage.x(prevX);
+      stage.y(prevY);
+      stage.batchDraw();
+      setExportMode(null);
+    }
+  }, 150);
+};
 
   const ghostItem = dragTypeRef.current
     ? PALETTE.find((p) => p.type === dragTypeRef.current)

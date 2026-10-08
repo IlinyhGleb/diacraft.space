@@ -1,13 +1,21 @@
 import type { BlockData, ArrowData } from '../types';
-import type { Crop } from '../../export/exportImage';
 import { EXPORT_PADDING } from '../constants';
 
+export type BBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/**
+ * Bounding box of everything drawn on the stage, in stage-local coords,
+ * with EXPORT_PADDING around it. Returns null for an empty diagram.
+ */
 export function getContentBBox(
   blocks: BlockData[],
-  arrows: ArrowData[],
-  stageX: number,
-  stageY: number
-): Crop | null {
+  arrows: ArrowData[]
+): BBox | null {
   if (blocks.length === 0 && arrows.length === 0) return null;
   let minX = Infinity;
   let minY = Infinity;
@@ -36,8 +44,8 @@ export function getContentBBox(
   if (!hasContent) return null;
 
   return {
-    x: minX + stageX - EXPORT_PADDING,
-    y: minY + stageY - EXPORT_PADDING,
+    x: minX - EXPORT_PADDING,
+    y: minY - EXPORT_PADDING,
     width: maxX - minX + 2 * EXPORT_PADDING,
     height: maxY - minY + 2 * EXPORT_PADDING,
   };
